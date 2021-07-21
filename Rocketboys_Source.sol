@@ -1,31 +1,7 @@
-/**
- *Submitted for verification at BscScan.com on 2021-07-14
-*/
-
 //SPDX-License-Identifier: MIT
 
 pragma solidity ^0.7.4;
 
-/**
- * $$$$$$$\                      $$\                  $$\     $$$$$$$\
- * $$  __$$\                     $$ |                 $$ |    $$  __$$\
- * $$ |  $$ | $$$$$$\   $$$$$$$\ $$ |  $$\  $$$$$$\ $$$$$$\   $$ |  $$ | $$$$$$\  $$\   $$\  $$$$$$$\
- * $$$$$$$  |$$  __$$\ $$  _____|$$ | $$  |$$  __$$\\_$$  _|  $$$$$$$\ |$$  __$$\ $$ |  $$ |$$  _____|
- * $$  __$$<a $$ /  $$ |$$ /      $$$$$$  / $$$$$$$$ | $$ |    $$  __$$\ $$ /  $$ |$$ |  $$ |\$$$$$$\
- * $$ |  $$ |$$ |  $$ |$$ |      $$  _$$<  $$   ____| $$ |$$\ $$ |  $$ |$$ |  $$ |$$ |  $$ | \____$$\
- * $$ |  $$ |\$$$$$$  |\$$$$$$$\ $$ | \$$\ \$$$$$$$\  \$$$$  |$$$$$$$  |\$$$$$$  |\$$$$$$$ |$$$$$$$  |
- * \__|  \__| \______/  \_______|\__|  \__| \_______|  \____/ \_______/  \______/  \____$$ |\_______/
- *                                                                                $$\   $$ |
- *                                                                                \$$$$$$  |
- *                                                                                 \______/
- *
- * https://rocketboys.io/
- * https://t.me/rocketboysofficial
- */
-
-/**
- * Standard SafeMath, stripped down to just add/sub/mul/div
- */
 library SafeMath {
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
@@ -223,8 +199,11 @@ contract DividendDistributor is IDividendDistributor {
         uint256 totalRealised;
     }
 
-    IBEP20 BUSD = IBEP20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
-    address WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    //addresses for production
+    //IBEP20 BUSD = IBEP20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
+    //address WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    IBEP20 BUSD = IBEP20(0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7);
+    address WBNB = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
     IDEXRouter router;
 
     address[] shareholders;
@@ -255,10 +234,21 @@ contract DividendDistributor is IDividendDistributor {
         require(msg.sender == _token); _;
     }
 
+
+    //production constructor
+    /*
     constructor (address _router) {
         router = _router != address(0)
         ? IDEXRouter(_router)
         : IDEXRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        _token = msg.sender;
+    }
+    */
+
+    constructor (address _router) {
+        router = _router != address(0)
+        ? IDEXRouter(_router)
+        : IDEXRouter(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
         _token = msg.sender;
     }
 
@@ -407,11 +397,14 @@ contract DividendDistributor is IDividendDistributor {
     event DividendsProcessed(uint256 iterations, uint256 count, uint256 index);
 }
 
-contract RocketBoys is IBEP20, Auth {
+contract RocketMoon is IBEP20, Auth {
     using SafeMath for uint256;
 
-    address BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
-    address WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c;
+    //addresses for production
+    //IBEP20 BUSD = IBEP20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
+    //address WBNB = 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c; 
+    address BUSD = 0x78867BbEeF44f2326bF8DDd1941a4439382EF2A7;
+    address WBNB = 0xae13d989daC2f0dEbFf460aC112a837C89BAa7cd;
     address DEAD = 0x000000000000000000000000000000000000dEaD;
 
     string constant _name = "Rocket Boys";
@@ -434,11 +427,11 @@ contract RocketBoys is IBEP20, Auth {
     uint256 liquidityFee = 200;
     uint256 liquidityFeeAccumulator;
 
-    uint256 buybackFee = 500;
-    uint256 reflectionFee = 300;
-    uint256 marketingFee = 200;
-    uint256 devFee = 200;
-    uint256 totalFee = 1200;
+    uint256 buybackFee = 200;
+    uint256 reflectionFee = 2000;
+    uint256 marketingFee = 300;
+    uint256 devFee = 0;
+    uint256 totalFee = 2500;
     uint256 feeDenominator = 10000;
 
     address public autoLiquidityReceiver;
@@ -470,7 +463,9 @@ contract RocketBoys is IBEP20, Auth {
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
     constructor () Auth(msg.sender) {
-        router = IDEXRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        // pancake swap address for profuction
+        // router = IDEXRouter(0x10ED43C718714eb63d5aA57B78B54704E256024E);
+        router = IDEXRouter(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3);
         pair = IDEXFactory(router.factory()).createPair(WBNB, address(this));
         _allowances[address(this)][address(router)] = uint256(-1);
 
