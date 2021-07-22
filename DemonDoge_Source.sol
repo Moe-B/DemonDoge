@@ -1174,7 +1174,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
     IUniswapV2Router02 public uniswapV2Router;
     address public immutable uniswapV2Pair;
 
-    address public bounceFixedSaleWallet;
+    // address public bounceFixedSaleWallet;
 
     bool private swapping;
 
@@ -1182,18 +1182,19 @@ contract FLIGHTTICKET is ERC20, Ownable {
 
     address public liquidityWallet;
 
-    uint256 public maxSellTransactionAmount = 1000000000000 * (10**18);
-    uint256 public swapTokensAtAmount = 200000000000 * (10**18);
-    uint256 public _maxWalletToken = 150000000000000 * (10**18); // 15% of total supply
+    uint256 public maxSellTransactionAmount = 100000000 * (10**18);
+    uint256 public swapTokensAtAmount = 20000000 * (10**18);
+    uint256 public _maxWalletToken = 15000000000 * (10**18); // 15% of total supply
     
     //total supply is 100000000000 * (10**18)
 
     uint256 public immutable BNBRewardsFee;
     uint256 public immutable liquidityFee;
+    uint256 public immutable marketingFee;
     uint256 public immutable totalFees;
 
     // sells have fees of 12 and 6 (10 * 1.2 and 5 * 1.2)
-    uint256 public immutable sellFeeIncreaseFactor = 120; 
+    // uint256 public immutable sellFeeIncreaseFactor = 120; 
 
     // use by default 300,000 gas to process auto-claiming dividends
     uint256 public gasForProcessing = 300000;
@@ -1201,34 +1202,34 @@ contract FLIGHTTICKET is ERC20, Ownable {
 
     /*   Fixed Sale   */
 
-    // timestamp for when purchases on the fixed-sale are available to early participants
-    uint256 public fixedSaleStartTimestamp = 1623960000; //June 17, 20:00 UTC, 2021
+    // timestamp for Presale
+    uint256 public presaleStartTimestamp = 1633478400; //Octobor 5, 17:00 UTC, 2021
 
     // the fixed-sale will be open to the public 10 minutes after fixedSaleStartTimestamp,
     // or after 600 buys, whichever comes first.
-    uint256 public immutable fixedSaleEarlyParticipantDuration = 600;
-    uint256 public immutable fixedSaleEarlyParticipantBuysThreshold = 600;
+    // uint256 public immutable fixedSaleEarlyParticipantDuration = 600;
+    // uint256 public immutable fixedSaleEarlyParticipantBuysThreshold = 600;
 
     // track number of buys. once this reaches fixedSaleEarlyParticipantBuysThreshold,
     // the fixed-sale will be open to the public even if it's still in the first 10 minutes
-    uint256 public numberOfFixedSaleBuys;
+    // uint256 public numberOfFixedSaleBuys;
     // track who has bought
-    mapping (address => bool) public fixedSaleBuyers;
+    // mapping (address => bool) public fixedSaleBuyers;
 
     /******************/
 
 
 
     // timestamp for when the token can be traded freely on PanackeSwap
-    uint256 public tradingEnabledTimestamp = 1623967200; //June 17, 22:00 UTC, 2021
+    uint256 public presaleEndTimestamp = 1634083200; ////Octobor 12, 17:00 UTC, 2021
 
     // exlcude from fees and max transaction amount
     mapping (address => bool) private _isExcludedFromFees;
 
     // addresses that can make transfers before presale is over
-    mapping (address => bool) private canTransferBeforeTradingIsEnabled;
+    // mapping (address => bool) private canTransferBeforeTradingIsEnabled;
 
-    mapping (address => bool) public fixedSaleEarlyParticipants;
+    // mapping (address => bool) public fixedSaleEarlyParticipants;
     mapping (address => bool) public _isExcludedMaxSellTransactionAmount;
 
     // store addresses that a automatic market maker pairs. Any transfer *to* these addresses
@@ -1243,7 +1244,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
     event ExcludeMultipleAccountsFromFees(address[] accounts, bool isExcluded);
     event ExcludedMaxSellTransactionAmount(address indexed account, bool isExcluded);
 
-    event FixedSaleEarlyParticipantsAdded(address[] participants);
+    // event FixedSaleEarlyParticipantsAdded(address[] participants);
 
     event SetAutomatedMarketMakerPair(address indexed pair, bool indexed value);
 
@@ -1251,7 +1252,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
 
     event GasForProcessingUpdated(uint256 indexed newValue, uint256 indexed oldValue);
 
-    event FixedSaleBuy(address indexed account, uint256 indexed amount, bool indexed earlyParticipant, uint256 numberOfBuyers);
+    // event FixedSaleBuy(address indexed account, uint256 indexed amount, bool indexed earlyParticipant, uint256 numberOfBuyers);
 
     event SwapAndLiquify(
         uint256 tokensSwapped,
@@ -1273,13 +1274,15 @@ contract FLIGHTTICKET is ERC20, Ownable {
     	address indexed processor
     );
 
-    constructor() public ERC20("Flight Ticket", "FLIGHTTICKET") {
-        uint256 _BNBRewardsFee = 12;
-        uint256 _liquidityFee = 2;
+    constructor() public ERC20("Demon Doge", "DDOGE") {
+        uint256 _BNBRewardsFee = 4;
+        uint256 _liquidityFee = 1;
+        uint256 _marketingFee = 0;
 
         BNBRewardsFee = _BNBRewardsFee;
         liquidityFee = _liquidityFee;
-        totalFees = _BNBRewardsFee.add(_liquidityFee);
+        marketingFee = _marketingFee;
+        totalFees = _BNBRewardsFee.add(_liquidityFee).add(_marketingFee);
         
     	dividendTracker = new FLIGHTTICKETDividendTracker();
 
@@ -1299,15 +1302,15 @@ contract FLIGHTTICKET is ERC20, Ownable {
 
         _setAutomatedMarketMakerPair(_uniswapV2Pair, true);
 
-        address _bounceFixedSaleWallet = 0x4Fc4bFeDc5c82644514fACF716C7F888a0C73cCc;
-        bounceFixedSaleWallet = _bounceFixedSaleWallet;
+        // address _bounceFixedSaleWallet = 0x4Fc4bFeDc5c82644514fACF716C7F888a0C73cCc;
+        // bounceFixedSaleWallet = _bounceFixedSaleWallet;
 
         // exclude from receiving dividends
         dividendTracker.excludeFromDividends(address(dividendTracker));
         dividendTracker.excludeFromDividends(address(this));
         dividendTracker.excludeFromDividends(owner());
         dividendTracker.excludeFromDividends(address(_uniswapV2Router));
-        dividendTracker.excludeFromDividends(_bounceFixedSaleWallet);
+        // dividendTracker.excludeFromDividends(_bounceFixedSaleWallet);
 
         // exclude from paying fees or having max transaction amount
         excludeFromFees(liquidityWallet, true);
@@ -1316,17 +1319,17 @@ contract FLIGHTTICKET is ERC20, Ownable {
         updateMaxSellTransactionAmount(address(this), true);
         updateMaxSellTransactionAmount(address(dividendTracker), true);
         updateMaxSellTransactionAmount(address(_uniswapV2Router), true);
-        updateMaxSellTransactionAmount(_bounceFixedSaleWallet, true);
+        // updateMaxSellTransactionAmount(_bounceFixedSaleWallet, true);
 
         // enable owner and fixed-sale wallet to send tokens before presales are over
-        canTransferBeforeTradingIsEnabled[owner()] = true;
-        canTransferBeforeTradingIsEnabled[_bounceFixedSaleWallet] = true;
+        // canTransferBeforeTradingIsEnabled[owner()] = true;
+        // canTransferBeforeTradingIsEnabled[_bounceFixedSaleWallet] = true;
 
         /*
             _mint is an internal function in ERC20.sol that is only called here,
             and CANNOT be called ever again
         */
-        _mint(owner(), 1000000000000000 * (10**18));
+        _mint(owner(), 100000000000 * (10**18));
     }
 
     receive() external payable {
@@ -1343,22 +1346,22 @@ contract FLIGHTTICKET is ERC20, Ownable {
         emit ExcludedMaxSellTransactionAmount(updAds, isEx);
     }
 
-    function updateBounceFixedSaleWallet(address newAddress) public onlyOwner {
-        require(newAddress != address(0));
+    // function updateBounceFixedSaleWallet(address newAddress) public onlyOwner {
+    //     require(newAddress != address(0));
 
-        bounceFixedSaleWallet = payable(newAddress);
-        dividendTracker.excludeFromDividends(bounceFixedSaleWallet);
-        canTransferBeforeTradingIsEnabled[bounceFixedSaleWallet] = true;
+    //     bounceFixedSaleWallet = payable(newAddress);
+    //     dividendTracker.excludeFromDividends(bounceFixedSaleWallet);
+    //     canTransferBeforeTradingIsEnabled[bounceFixedSaleWallet] = true;
+    // }
+
+    function updatePresaleStartTimestamp(uint256 newTimestamp) public onlyOwner {
+        require(newTimestamp != presaleStartTimestamp);
+        presaleStartTimestamp = newTimestamp;
     }
 
-    function updateFixedSaleStartTimestamp(uint256 newTimestamp) public onlyOwner {
-        require(newTimestamp != fixedSaleStartTimestamp);
-        fixedSaleStartTimestamp = newTimestamp;
-    }
-
-    function updateTradingEnabledTimestamp(uint256 newTradingEnabledTimestamp) public onlyOwner {
-        require(newTradingEnabledTimestamp != tradingEnabledTimestamp);
-        tradingEnabledTimestamp = newTradingEnabledTimestamp;
+    function updatePresaleEndTimestamp(uint256 newPresaleTimestamp) public onlyOwner {
+        require(newPresaleEndTimestamp != presaleEndTimestamp);
+        presaleEndTimestamp = newPresaleEndTimestamp;
     }
 
     function updateDividendTracker(address newAddress) public onlyOwner {
@@ -1399,13 +1402,13 @@ contract FLIGHTTICKET is ERC20, Ownable {
         emit ExcludeMultipleAccountsFromFees(accounts, excluded);
     }
 
-    function addFixedSaleEarlyParticipants(address[] calldata accounts) external onlyOwner {
-        for(uint256 i = 0; i < accounts.length; i++) {
-            fixedSaleEarlyParticipants[accounts[i]] = true;
-        }
+    // function addFixedSaleEarlyParticipants(address[] calldata accounts) external onlyOwner {
+    //     for(uint256 i = 0; i < accounts.length; i++) {
+    //         fixedSaleEarlyParticipants[accounts[i]] = true;
+    //     }
 
-        emit FixedSaleEarlyParticipantsAdded(accounts);
-    }
+    //     emit FixedSaleEarlyParticipantsAdded(accounts);
+    // }
 
     function setAutomatedMarketMakerPair(address pair, bool value) public onlyOwner {
         require(pair != uniswapV2Pair, "FLIGHTTICKET: The PancakeSwap pair cannot be removed from automatedMarketMakerPairs");
@@ -1506,8 +1509,8 @@ contract FLIGHTTICKET is ERC20, Ownable {
         return dividendTracker.getNumberOfTokenHolders();
     }
 
-    function getTradingIsEnabled() public view returns (bool) {
-        return block.timestamp >= tradingEnabledTimestamp;
+    function getPresaleIsEnd() public view returns (bool) {
+        return block.timestamp >= presaleEndTimestamp;
     }
 
     function _transfer(
@@ -1517,17 +1520,17 @@ contract FLIGHTTICKET is ERC20, Ownable {
     ) internal override {
         require(from != address(0), "ERC20: transfer from the zero address");
         require(to != address(0), "ERC20: transfer to the zero address");
-            if (
+        if (
             from != owner() &&
             to != owner() &&
             to != address(0) &&
             to != address(0xdead) &&
             to != uniswapV2Pair
         ) {
-            require(
-                amount <= maxSellTransactionAmount,
-                "Transfer amount exceeds the maxTxAmount."
-            );
+            // require(
+            //     amount <= maxSellTransactionAmount,
+            //     "Transfer amount exceeds the maxTxAmount."
+            // );
             
             uint256 contractBalanceRecepient = balanceOf(to);
             require(
@@ -1537,44 +1540,44 @@ contract FLIGHTTICKET is ERC20, Ownable {
         }
         
         
-        bool tradingIsEnabled = getTradingIsEnabled();
+        // bool tradingIsEnabled = getPresaleIsEnd();
 
         // only whitelisted addresses can make transfers after the fixed-sale has started
         // and before the public presale is over
-        if(!tradingIsEnabled) {
-            require(canTransferBeforeTradingIsEnabled[from], "FLIGHTTICKET: This account cannot send tokens until trading is enabled");
-        }
+        // if(!tradingIsEnabled) {
+        //     require(canTransferBeforeTradingIsEnabled[from], "FLIGHTTICKET: This account cannot send tokens until trading is enabled");
+        // }
 
-        if(amount == 0) {
-            super._transfer(from, to, 0);
-            return;
-        }
+        // if(amount == 0) {
+        //     super._transfer(from, to, 0);
+        //     return;
+        // }
 
-        bool isFixedSaleBuy = from == bounceFixedSaleWallet && to != owner();
+        // bool isFixedSaleBuy = from == bounceFixedSaleWallet && to != owner();
 
         // the fixed-sale can only send tokens to the owner or early participants of the fixed sale in the first 10 minutes,
         // or 600 transactions, whichever is first.
-        if(isFixedSaleBuy) {
-            require(block.timestamp >= fixedSaleStartTimestamp, "FLIGHTTICKET: The fixed-sale has not started yet.");
+        // if(isFixedSaleBuy) {
+        //     require(block.timestamp >= presaleStartTimestamp, "FLIGHTTICKET: The fixed-sale has not started yet.");
 
-            bool openToEveryone = block.timestamp.sub(fixedSaleStartTimestamp) >= fixedSaleEarlyParticipantDuration ||
-                                  numberOfFixedSaleBuys >= fixedSaleEarlyParticipantBuysThreshold;
+        //     bool openToEveryone = block.timestamp.sub(presaleStartTimestamp) >= fixedSaleEarlyParticipantDuration ||
+        //                           numberOfFixedSaleBuys >= fixedSaleEarlyParticipantBuysThreshold;
 
-            if(!openToEveryone) {
-                require(fixedSaleEarlyParticipants[to], "FLIGHTTICKET: The fixed-sale is only available to certain participants at the start");
-            }
+        //     if(!openToEveryone) {
+        //         require(fixedSaleEarlyParticipants[to], "FLIGHTTICKET: The fixed-sale is only available to certain participants at the start");
+        //     }
 
-            if(!fixedSaleBuyers[to]) {
-                fixedSaleBuyers[to] = true;
-                numberOfFixedSaleBuys = numberOfFixedSaleBuys.add(1);
-            }
+        //     if(!fixedSaleBuyers[to]) {
+        //         fixedSaleBuyers[to] = true;
+        //         numberOfFixedSaleBuys = numberOfFixedSaleBuys.add(1);
+        //     }
 
-            emit FixedSaleBuy(to, amount, fixedSaleEarlyParticipants[to], numberOfFixedSaleBuys);
-        }
+        //     emit FixedSaleBuy(to, amount, fixedSaleEarlyParticipants[to], numberOfFixedSaleBuys);
+        // }
 
         if( 
         	!swapping &&
-        	tradingIsEnabled &&
+        	// tradingIsEnabled &&
             automatedMarketMakerPairs[to] && // sells only by detecting transfer to automated market maker pair
         	from != address(uniswapV2Router) && //router -> pair is removing liquidity which shouldn't have max
             !_isExcludedFromFees[to] //no max for those excluded from fees
@@ -1589,7 +1592,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
         bool canSwap = contractTokenBalance >= swapTokensAtAmount;
 
         if(
-            tradingIsEnabled && 
+            // tradingIsEnabled && 
             canSwap &&
             !swapping &&
             !automatedMarketMakerPairs[from] &&
