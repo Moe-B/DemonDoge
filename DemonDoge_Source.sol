@@ -24,7 +24,7 @@ abstract contract Context {
         return msg.sender;
     }
 
-    function _msgData() internal view virtual returns (bytes calldata) {
+    function _msgData() internal view virtual returns (bytes memory) {
         this; // silence state mutability warning without generating bytecode - see https://github.com/ethereum/solidity/issues/2691
         return msg.data;
     }
@@ -1172,64 +1172,40 @@ contract FLIGHTTICKET is ERC20, Ownable {
     using SafeMath for uint256;
 
     IUniswapV2Router02 public uniswapV2Router;
-    address public immutable uniswapV2Pair;
-
-    // address public bounceFixedSaleWallet;
+    address public uniswapV2Pair;
 
     bool private swapping;
 
     FLIGHTTICKETDividendTracker public dividendTracker;
+    address payable public marketingWallet;
 
     address public liquidityWallet;
 
-    uint256 public maxSellTransactionAmount = 100000000 * (10**18);
-    uint256 public swapTokensAtAmount = 20000000 * (10**18);
-    uint256 public _maxWalletToken = 15000000000 * (10**18); // 15% of total supply
-    
-    //total supply is 100000000000 * (10**18)
+    uint256 public maxSellTransactionAmount = 100 * (10 **6) * (10**18);
+    uint256 public swapTokensAtAmount = 20 * (10 ** 6) * (10**18);
+    uint256 public _maxWalletToken = 15 * (10 ** 9) * (10**18); // 15% of total supply
 
-    uint256 public immutable BNBRewardsFee;
-    uint256 public immutable liquidityFee;
-    uint256 public immutable marketingFee;
-    uint256 public immutable totalFees;
+    uint256 public constant BNBRewardsFee = 10; // %
+    uint256 public constant liquidityFee = 3; // %
+    uint256 public constant marketingFee = 2; // %
+    uint256 public constant totalFees = 15; // %
 
-    // sells have fees of 12 and 6 (10 * 1.2 and 5 * 1.2)
-    // uint256 public immutable sellFeeIncreaseFactor = 120; 
+    uint256 public constant sellingBNBRewardsFee = 20; // %
+    uint256 public constant sellingLiquidityFee = 3; // %
+    uint256 public constant sellingMarketingFee = 2; // %
+    uint256 public constant sellingTotalFees = 25; // %
+
+    //each current fee amount in wallet ( multiply by 100 )
+    uint256 private _currentBNBRewardsTokens;
+    uint256 private _currentLiquidityTokens;
+    uint256 private _currentMarketingTokens;
 
     // use by default 300,000 gas to process auto-claiming dividends
     uint256 public gasForProcessing = 300000;
 
-
-    /*   Fixed Sale   */
-
-    // timestamp for Presale
-    uint256 public presaleStartTimestamp = 1633478400; //Octobor 5, 17:00 UTC, 2021
-
-    // the fixed-sale will be open to the public 10 minutes after fixedSaleStartTimestamp,
-    // or after 600 buys, whichever comes first.
-    // uint256 public immutable fixedSaleEarlyParticipantDuration = 600;
-    // uint256 public immutable fixedSaleEarlyParticipantBuysThreshold = 600;
-
-    // track number of buys. once this reaches fixedSaleEarlyParticipantBuysThreshold,
-    // the fixed-sale will be open to the public even if it's still in the first 10 minutes
-    // uint256 public numberOfFixedSaleBuys;
-    // track who has bought
-    // mapping (address => bool) public fixedSaleBuyers;
-
-    /******************/
-
-
-
-    // timestamp for when the token can be traded freely on PanackeSwap
-    uint256 public presaleEndTimestamp = 1634083200; ////Octobor 12, 17:00 UTC, 2021
-
     // exlcude from fees and max transaction amount
     mapping (address => bool) private _isExcludedFromFees;
-
-    // addresses that can make transfers before presale is over
-    // mapping (address => bool) private canTransferBeforeTradingIsEnabled;
-
-    // mapping (address => bool) public fixedSaleEarlyParticipants;
+    
     mapping (address => bool) public _isExcludedMaxSellTransactionAmount;
 
     // store addresses that a automatic market maker pairs. Any transfer *to* these addresses
@@ -1244,15 +1220,11 @@ contract FLIGHTTICKET is ERC20, Ownable {
     event ExcludeMultipleAccountsFromFees(address[] accounts, bool isExcluded);
     event ExcludedMaxSellTransactionAmount(address indexed account, bool isExcluded);
 
-    // event FixedSaleEarlyParticipantsAdded(address[] participants);
-
     event SetAutomatedMarketMakerPair(address indexed pair, bool indexed value);
 
     event LiquidityWalletUpdated(address indexed newLiquidityWallet, address indexed oldLiquidityWallet);
 
     event GasForProcessingUpdated(uint256 indexed newValue, uint256 indexed oldValue);
-
-    // event FixedSaleBuy(address indexed account, uint256 indexed amount, bool indexed earlyParticipant, uint256 numberOfBuyers);
 
     event SwapAndLiquify(
         uint256 tokensSwapped,
@@ -1261,39 +1233,32 @@ contract FLIGHTTICKET is ERC20, Ownable {
     );
 
     event SendDividends(
-    	uint256 tokensSwapped,
-    	uint256 amount
+        uint256 tokensSwapped,
+        uint256 amount
     );
 
     event ProcessedDividendTracker(
-    	uint256 iterations,
-    	uint256 claims,
+        uint256 iterations,
+        uint256 claims,
         uint256 lastProcessedIndex,
-    	bool indexed automatic,
-    	uint256 gas,
-    	address indexed processor
+        bool indexed automatic,
+        uint256 gas,
+        address indexed processor
+    );
+    
+    event SendToMarketing(
+        uint256 tokenAmont,
+        uint256 bnbAmount
     );
 
-    constructor() public ERC20("Demon Doge", "DDOGE") {
-        uint256 _BNBRewardsFee = 4;
-        uint256 _liquidityFee = 1;
-        uint256 _marketingFee = 0;
-
-        BNBRewardsFee = _BNBRewardsFee;
-        liquidityFee = _liquidityFee;
-        marketingFee = _marketingFee;
-        totalFees = _BNBRewardsFee.add(_liquidityFee).add(_marketingFee);
+    constructor() public ERC20("Deamon Doge", "DDOGE") {
         
-    	dividendTracker = new FLIGHTTICKETDividendTracker();
+        dividendTracker = new FLIGHTTICKETDividendTracker();
 
-    	liquidityWallet = owner();
-
-    	
-    	IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x10ED43C718714eb63d5aA57B78B54704E256024E);
-    	
-    	//0xD99D1c33F9fC3444f8101754aBC46c52416550D1 testnet
-    	//0x10ED43C718714eb63d5aA57B78B54704E256024E mainnet
-         // Create a uniswap pair for this new token
+        liquidityWallet = owner();
+        
+        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3); //0x10ED43C718714eb63d5aA57B78B54704E256024E
+        
         address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
             .createPair(address(this), _uniswapV2Router.WETH());
 
@@ -1302,15 +1267,13 @@ contract FLIGHTTICKET is ERC20, Ownable {
 
         _setAutomatedMarketMakerPair(_uniswapV2Pair, true);
 
-        // address _bounceFixedSaleWallet = 0x4Fc4bFeDc5c82644514fACF716C7F888a0C73cCc;
-        // bounceFixedSaleWallet = _bounceFixedSaleWallet;
+        marketingWallet = payable(0x0acbdD180e9eFD46ae92D3405AC8B24edFdF924d);
 
         // exclude from receiving dividends
         dividendTracker.excludeFromDividends(address(dividendTracker));
         dividendTracker.excludeFromDividends(address(this));
         dividendTracker.excludeFromDividends(owner());
         dividendTracker.excludeFromDividends(address(_uniswapV2Router));
-        // dividendTracker.excludeFromDividends(_bounceFixedSaleWallet);
 
         // exclude from paying fees or having max transaction amount
         excludeFromFees(liquidityWallet, true);
@@ -1319,22 +1282,17 @@ contract FLIGHTTICKET is ERC20, Ownable {
         updateMaxSellTransactionAmount(address(this), true);
         updateMaxSellTransactionAmount(address(dividendTracker), true);
         updateMaxSellTransactionAmount(address(_uniswapV2Router), true);
-        // updateMaxSellTransactionAmount(_bounceFixedSaleWallet, true);
-
-        // enable owner and fixed-sale wallet to send tokens before presales are over
-        // canTransferBeforeTradingIsEnabled[owner()] = true;
-        // canTransferBeforeTradingIsEnabled[_bounceFixedSaleWallet] = true;
-
+        
         /*
             _mint is an internal function in ERC20.sol that is only called here,
             and CANNOT be called ever again
         */
-        _mint(owner(), 100000000000 * (10**18));
+        _mint(owner(), 100 * (10 ** 9) * (10**18));
     }
 
     receive() external payable {
 
-  	}
+    }
 
     function updateMaxAmount(uint256 newNum) public onlyOwner {
         require(maxSellTransactionAmount != newNum);
@@ -1344,24 +1302,6 @@ contract FLIGHTTICKET is ERC20, Ownable {
     function updateMaxSellTransactionAmount(address updAds, bool isEx) public onlyOwner {
         _isExcludedMaxSellTransactionAmount[updAds] = isEx;
         emit ExcludedMaxSellTransactionAmount(updAds, isEx);
-    }
-
-    // function updateBounceFixedSaleWallet(address newAddress) public onlyOwner {
-    //     require(newAddress != address(0));
-
-    //     bounceFixedSaleWallet = payable(newAddress);
-    //     dividendTracker.excludeFromDividends(bounceFixedSaleWallet);
-    //     canTransferBeforeTradingIsEnabled[bounceFixedSaleWallet] = true;
-    // }
-
-    function updatePresaleStartTimestamp(uint256 newTimestamp) public onlyOwner {
-        require(newTimestamp != presaleStartTimestamp);
-        presaleStartTimestamp = newTimestamp;
-    }
-
-    function updatePresaleEndTimestamp(uint256 newPresaleTimestamp) public onlyOwner {
-        require(newPresaleEndTimestamp != presaleEndTimestamp);
-        presaleEndTimestamp = newPresaleEndTimestamp;
     }
 
     function updateDividendTracker(address newAddress) public onlyOwner {
@@ -1394,7 +1334,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
         emit ExcludeFromFees(account, excluded);
     }
 
-    function excludeMultipleAccountsFromFees(address[] calldata accounts, bool excluded) public onlyOwner {
+    function excludeMultipleAccountsFromFees(address[] memory accounts, bool excluded) public onlyOwner {
         for(uint256 i = 0; i < accounts.length; i++) {
             _isExcludedFromFees[accounts[i]] = excluded;
         }
@@ -1402,22 +1342,14 @@ contract FLIGHTTICKET is ERC20, Ownable {
         emit ExcludeMultipleAccountsFromFees(accounts, excluded);
     }
 
-    // function addFixedSaleEarlyParticipants(address[] calldata accounts) external onlyOwner {
-    //     for(uint256 i = 0; i < accounts.length; i++) {
-    //         fixedSaleEarlyParticipants[accounts[i]] = true;
-    //     }
-
-    //     emit FixedSaleEarlyParticipantsAdded(accounts);
-    // }
-
     function setAutomatedMarketMakerPair(address pair, bool value) public onlyOwner {
-        require(pair != uniswapV2Pair, "FLIGHTTICKET: The PancakeSwap pair cannot be removed from automatedMarketMakerPairs");
+        require(pair != uniswapV2Pair, "DDOGE: The PancakeSwap pair cannot be removed from automatedMarketMakerPairs");
 
         _setAutomatedMarketMakerPair(pair, value);
     }
 
     function _setAutomatedMarketMakerPair(address pair, bool value) private {
-        require(automatedMarketMakerPairs[pair] != value, "FLIGHTTICKET: Automated market maker pair is already set to that value");
+        require(automatedMarketMakerPairs[pair] != value, "DDOGE: Automated market maker pair is already set to that value");
         automatedMarketMakerPairs[pair] = value;
 
         if(value) {
@@ -1429,7 +1361,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
 
 
     function updateLiquidityWallet(address newLiquidityWallet) public onlyOwner {
-        require(newLiquidityWallet != liquidityWallet, "FLIGHTTICKET: The liquidity wallet is already this address");
+        require(newLiquidityWallet != liquidityWallet, "DDOGE: The liquidity wallet is already this address");
         excludeFromFees(newLiquidityWallet, true);
         emit LiquidityWalletUpdated(newLiquidityWallet, liquidityWallet);
         liquidityWallet = newLiquidityWallet;
@@ -1459,12 +1391,12 @@ contract FLIGHTTICKET is ERC20, Ownable {
     }
 
     function withdrawableDividendOf(address account) public view returns(uint256) {
-    	return dividendTracker.withdrawableDividendOf(account);
-  	}
+        return dividendTracker.withdrawableDividendOf(account);
+    }
 
-	function dividendTokenBalanceOf(address account) public view returns (uint256) {
-		return dividendTracker.balanceOf(account);
-	}
+    function dividendTokenBalanceOf(address account) public view returns (uint256) {
+        return dividendTracker.balanceOf(account);
+    }
 
     function getAccountDividendsInfo(address account)
         external view returns (
@@ -1479,7 +1411,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
         return dividendTracker.getAccount(account);
     }
 
-	function getAccountDividendsInfoAtIndex(uint256 index)
+    function getAccountDividendsInfoAtIndex(uint256 index)
         external view returns (
             address,
             int256,
@@ -1489,28 +1421,24 @@ contract FLIGHTTICKET is ERC20, Ownable {
             uint256,
             uint256,
             uint256) {
-    	return dividendTracker.getAccountAtIndex(index);
+        return dividendTracker.getAccountAtIndex(index);
     }
 
-	function processDividendTracker(uint256 gas) external {
-		(uint256 iterations, uint256 claims, uint256 lastProcessedIndex) = dividendTracker.process(gas);
-		emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, false, gas, tx.origin);
+    function processDividendTracker(uint256 gas) external {
+        (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) = dividendTracker.process(gas);
+        emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, false, gas, tx.origin);
     }
 
     function claim() external {
-		dividendTracker.processAccount(msg.sender, false);
+        dividendTracker.processAccount(msg.sender, false);
     }
 
     function getLastProcessedIndex() external view returns(uint256) {
-    	return dividendTracker.getLastProcessedIndex();
+        return dividendTracker.getLastProcessedIndex();
     }
 
     function getNumberOfDividendTokenHolders() external view returns(uint256) {
         return dividendTracker.getNumberOfTokenHolders();
-    }
-
-    function getPresaleIsEnd() public view returns (bool) {
-        return block.timestamp >= presaleEndTimestamp;
     }
 
     function _transfer(
@@ -1527,10 +1455,10 @@ contract FLIGHTTICKET is ERC20, Ownable {
             to != address(0xdead) &&
             to != uniswapV2Pair
         ) {
-            // require(
-            //     amount <= maxSellTransactionAmount,
-            //     "Transfer amount exceeds the maxTxAmount."
-            // );
+            require(
+                amount <= maxSellTransactionAmount,
+                "Transfer amount exceeds the maxTxAmount."
+            );
             
             uint256 contractBalanceRecepient = balanceOf(to);
             require(
@@ -1538,48 +1466,12 @@ contract FLIGHTTICKET is ERC20, Ownable {
                 "Exceeds maximum wallet token amount."
             );
         }
-        
-        
-        // bool tradingIsEnabled = getPresaleIsEnd();
-
-        // only whitelisted addresses can make transfers after the fixed-sale has started
-        // and before the public presale is over
-        // if(!tradingIsEnabled) {
-        //     require(canTransferBeforeTradingIsEnabled[from], "FLIGHTTICKET: This account cannot send tokens until trading is enabled");
-        // }
-
-        // if(amount == 0) {
-        //     super._transfer(from, to, 0);
-        //     return;
-        // }
-
-        // bool isFixedSaleBuy = from == bounceFixedSaleWallet && to != owner();
-
-        // the fixed-sale can only send tokens to the owner or early participants of the fixed sale in the first 10 minutes,
-        // or 600 transactions, whichever is first.
-        // if(isFixedSaleBuy) {
-        //     require(block.timestamp >= presaleStartTimestamp, "FLIGHTTICKET: The fixed-sale has not started yet.");
-
-        //     bool openToEveryone = block.timestamp.sub(presaleStartTimestamp) >= fixedSaleEarlyParticipantDuration ||
-        //                           numberOfFixedSaleBuys >= fixedSaleEarlyParticipantBuysThreshold;
-
-        //     if(!openToEveryone) {
-        //         require(fixedSaleEarlyParticipants[to], "FLIGHTTICKET: The fixed-sale is only available to certain participants at the start");
-        //     }
-
-        //     if(!fixedSaleBuyers[to]) {
-        //         fixedSaleBuyers[to] = true;
-        //         numberOfFixedSaleBuys = numberOfFixedSaleBuys.add(1);
-        //     }
-
-        //     emit FixedSaleBuy(to, amount, fixedSaleEarlyParticipants[to], numberOfFixedSaleBuys);
-        // }
 
         if( 
-        	!swapping &&
-        	// tradingIsEnabled &&
+            !swapping &&
+            // tradingIsEnabled &&
             automatedMarketMakerPairs[to] && // sells only by detecting transfer to automated market maker pair
-        	from != address(uniswapV2Router) && //router -> pair is removing liquidity which shouldn't have max
+            from != address(uniswapV2Router) && //router -> pair is removing liquidity which shouldn't have max
             !_isExcludedFromFees[to] //no max for those excluded from fees
         ) {
             if (!_isExcludedMaxSellTransactionAmount[from]) {
@@ -1587,7 +1479,7 @@ contract FLIGHTTICKET is ERC20, Ownable {
             }
         }
 
-		uint256 contractTokenBalance = balanceOf(address(this));
+        uint256 contractTokenBalance = balanceOf(address(this));
         
         bool canSwap = contractTokenBalance >= swapTokensAtAmount;
 
@@ -1600,51 +1492,105 @@ contract FLIGHTTICKET is ERC20, Ownable {
             to != liquidityWallet
         ) {
             swapping = true;
+            
+            checkFees();
 
-            uint256 swapTokens = contractTokenBalance.mul(liquidityFee).div(totalFees);
+            //add to liquidity
+            uint256 swapTokens = _currentLiquidityTokens.div(100);
             swapAndLiquify(swapTokens);
+            _currentLiquidityTokens = _currentLiquidityTokens.mod(100);
 
-            uint256 sellTokens = balanceOf(address(this));
-            swapAndSendDividends(sellTokens);
+            //send to marketing wallet and distribute to holders
+            uint256 sellTokens = _currentMarketingTokens.add(_currentBNBRewardsTokens).div(100);
+            swapAndSendMarketingTokensAndDividends(sellTokens, _currentMarketingTokens.div(100), _currentBNBRewardsTokens.div(100));
+            _currentMarketingTokens = _currentMarketingTokens.mod(100);
+            _currentBNBRewardsTokens = _currentBNBRewardsTokens.mod(100);
 
             swapping = false;
         }
 
 
-        bool takeFee = !isFixedSaleBuy && tradingIsEnabled && !swapping;
+        bool takeFee = !swapping;
 
         // if any account belongs to _isExcludedFromFee account then remove the fee
         if(_isExcludedFromFees[from] || _isExcludedFromFees[to]) {
             takeFee = false;
         }
 
-        if(takeFee) {
-        	uint256 fees = amount.mul(totalFees).div(100);
+        //check transaction is selling
+        bool sellFee = automatedMarketMakerPairs[to];
 
-            // if sell, multiply by 1.2
-            if(automatedMarketMakerPairs[to]) {
-                fees = fees.mul(sellFeeIncreaseFactor).div(100);
+        if(takeFee) {
+
+            uint256 fees;
+
+            //set fee
+            if(!sellFee) {
+
+                fees = amount.mul(totalFees).div(100);
+                //reset each current fee amount in wallet
+                _currentBNBRewardsTokens = _currentBNBRewardsTokens.add(fees.mul(BNBRewardsFee));
+                _currentLiquidityTokens = _currentLiquidityTokens.add(fees.mul(liquidityFee));
+                _currentMarketingTokens = _currentMarketingTokens.add(fees.mul(marketingFee));
+
             }
 
-        	amount = amount.sub(fees);
+            else {
 
+                fees = amount.mul(sellingTotalFees).div(100);
+                //reset each current fee amount in wallet
+                _currentBNBRewardsTokens = _currentBNBRewardsTokens.add(fees.mul(sellingBNBRewardsFee));
+                _currentLiquidityTokens = _currentLiquidityTokens.add(fees.mul(sellingLiquidityFee));
+                _currentMarketingTokens = _currentMarketingTokens.add(fees.mul(sellingMarketingFee));
+
+            }
+
+            amount = amount.sub(fees);
+
+            //send fee to this contract
             super._transfer(from, address(this), fees);
+
         }
 
+        //progress transfer
         super._transfer(from, to, amount);
 
         try dividendTracker.setBalance(payable(from), balanceOf(from)) {} catch {}
         try dividendTracker.setBalance(payable(to), balanceOf(to)) {} catch {}
 
         if(!swapping) {
-	    	uint256 gas = gasForProcessing;
+            uint256 gas = gasForProcessing;
 
-	    	try dividendTracker.process(gas) returns (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) {
-	    		emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, true, gas, tx.origin);
-	    	} 
-	    	catch {
+            try dividendTracker.process(gas) returns (uint256 iterations, uint256 claims, uint256 lastProcessedIndex) {
+                emit ProcessedDividendTracker(iterations, claims, lastProcessedIndex, true, gas, tx.origin);
+            } 
+            catch {
 
-	    	}
+            }
+        }
+    }
+    
+    function checkFees() private {
+        
+        uint256 balance = balanceOf(address(this)).mul(100);
+        uint256 totalTokens = _currentLiquidityTokens.add(_currentMarketingTokens).add(_currentBNBRewardsTokens);
+        
+        if( balance != totalTokens ) {
+
+            if( _currentLiquidityTokens == 0 || _currentMarketingTokens == 0 || _currentBNBRewardsTokens == 0 ) {
+
+                _currentLiquidityTokens = balance.mul(liquidityFee).div(totalFees);
+                _currentMarketingTokens = balance.mul(marketingFee).div(totalFees);
+                _currentBNBRewardsTokens = balance.sub(_currentLiquidityTokens).sub(_currentMarketingTokens);
+
+            } else {
+
+                _currentLiquidityTokens = balance.mul(_currentLiquidityTokens).div(totalTokens);
+                _currentMarketingTokens = balance.mul(_currentMarketingTokens).div(totalTokens);
+                _currentBNBRewardsTokens = balance.sub(_currentLiquidityTokens).sub(_currentMarketingTokens);
+
+            }
+
         }
     }
 
@@ -1709,13 +1655,24 @@ contract FLIGHTTICKET is ERC20, Ownable {
         
     }
 
-    function swapAndSendDividends(uint256 tokens) private {
+    //swap token to bnb and send it to marketing wallet and distribute to holders according to each token amount
+    function swapAndSendMarketingTokensAndDividends(uint256 tokens, uint256 marketingTokens, uint256 BNBRewardsTokens) private {
+
+        uint256 initialBalance = address(this).balance;
+        //swap token to bnb
         swapTokensForEth(tokens);
-        uint256 dividends = address(this).balance;
+
+        //send to marketing wallet
+        uint256 marketingBNB = address(this).balance.sub(initialBalance).mul(marketingTokens).div(tokens);
+        marketingWallet.transfer(marketingBNB);
+        emit SendToMarketing(marketingTokens, marketingBNB);
+        
+        //distribute to holders
+        uint256 dividends = address(this).balance.sub(initialBalance);
         (bool success,) = address(dividendTracker).call{value: dividends}("");
 
         if(success) {
-   	 		emit SendDividends(tokens, dividends);
+            emit SendDividends(BNBRewardsTokens, dividends);
         }
     }
 }
@@ -1734,7 +1691,7 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
     mapping (address => uint256) public lastClaimTimes;
 
     uint256 public claimWait;
-    uint256 public immutable minimumTokenBalanceForDividends;
+    uint256 public minimumTokenBalanceForDividends;
 
     event ExcludeFromDividends(address indexed account);
     event ClaimWaitUpdated(uint256 indexed newValue, uint256 indexed oldValue);
@@ -1742,7 +1699,7 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
     event Claim(address indexed account, uint256 amount, bool indexed automatic);
 
     constructor() public DividendPayingToken("FLIGHTTICKET_Dividend_Tracker", "FLIGHTTICKET_Dividend_Tracker") {
-    	claimWait = 3600;
+        claimWait = 3600;
         minimumTokenBalanceForDividends = 100000000 * (10**18); //must hold 10000+ tokens
     }
 
@@ -1755,13 +1712,13 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
     }
 
     function excludeFromDividends(address account) external onlyOwner {
-    	require(!excludedFromDividends[account]);
-    	excludedFromDividends[account] = true;
+        require(!excludedFromDividends[account]);
+        excludedFromDividends[account] = true;
 
-    	_setBalance(account, 0);
-    	tokenHoldersMap.remove(account);
+        _setBalance(account, 0);
+        tokenHoldersMap.remove(account);
 
-    	emit ExcludeFromDividends(account);
+        emit ExcludeFromDividends(account);
     }
 
     function updateClaimWait(uint256 newClaimWait) external onlyOwner {
@@ -1772,7 +1729,7 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
     }
 
     function getLastProcessedIndex() external view returns(uint256) {
-    	return lastProcessedIndex;
+        return lastProcessedIndex;
     }
 
     function getNumberOfTokenHolders() external view returns(uint256) {
@@ -1805,8 +1762,6 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
                 uint256 processesUntilEndOfArray = tokenHoldersMap.keys.length > lastProcessedIndex ?
                                                         tokenHoldersMap.keys.length.sub(lastProcessedIndex) :
                                                         0;
-
-
                 iterationsUntilProcessed = index.add(int256(processesUntilEndOfArray));
             }
         }
@@ -1836,7 +1791,7 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
             uint256,
             uint256,
             uint256) {
-    	if(index >= tokenHoldersMap.size()) {
+        if(index >= tokenHoldersMap.size()) {
             return (0x0000000000000000000000000000000000000000, -1, -1, 0, 0, 0, 0, 0);
         }
 
@@ -1846,86 +1801,86 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
     }
 
     function canAutoClaim(uint256 lastClaimTime) private view returns (bool) {
-    	if(lastClaimTime > block.timestamp)  {
-    		return false;
-    	}
+        if(lastClaimTime > block.timestamp)  {
+            return false;
+        }
 
-    	return block.timestamp.sub(lastClaimTime) >= claimWait;
+        return block.timestamp.sub(lastClaimTime) >= claimWait;
     }
 
     function setBalance(address payable account, uint256 newBalance) external onlyOwner {
-    	if(excludedFromDividends[account]) {
-    		return;
-    	}
+        if(excludedFromDividends[account]) {
+            return;
+        }
 
-    	if(newBalance >= minimumTokenBalanceForDividends) {
+        if(newBalance >= minimumTokenBalanceForDividends) {
             _setBalance(account, newBalance);
-    		tokenHoldersMap.set(account, newBalance);
-    	}
-    	else {
+            tokenHoldersMap.set(account, newBalance);
+        }
+        else {
             _setBalance(account, 0);
-    		tokenHoldersMap.remove(account);
-    	}
+            tokenHoldersMap.remove(account);
+        }
 
-    	processAccount(account, true);
+        processAccount(account, true);
     }
 
     function process(uint256 gas) public returns (uint256, uint256, uint256) {
-    	uint256 numberOfTokenHolders = tokenHoldersMap.keys.length;
+        uint256 numberOfTokenHolders = tokenHoldersMap.keys.length;
 
-    	if(numberOfTokenHolders == 0) {
-    		return (0, 0, lastProcessedIndex);
-    	}
+        if(numberOfTokenHolders == 0) {
+            return (0, 0, lastProcessedIndex);
+        }
 
-    	uint256 _lastProcessedIndex = lastProcessedIndex;
+        uint256 _lastProcessedIndex = lastProcessedIndex;
 
-    	uint256 gasUsed = 0;
+        uint256 gasUsed = 0;
 
-    	uint256 gasLeft = gasleft();
+        uint256 gasLeft = gasleft();
 
-    	uint256 iterations = 0;
-    	uint256 claims = 0;
+        uint256 iterations = 0;
+        uint256 claims = 0;
 
-    	while(gasUsed < gas && iterations < numberOfTokenHolders) {
-    		_lastProcessedIndex++;
+        while(gasUsed < gas && iterations < numberOfTokenHolders) {
+            _lastProcessedIndex++;
 
-    		if(_lastProcessedIndex >= tokenHoldersMap.keys.length) {
-    			_lastProcessedIndex = 0;
-    		}
+            if(_lastProcessedIndex >= tokenHoldersMap.keys.length) {
+                _lastProcessedIndex = 0;
+            }
 
-    		address account = tokenHoldersMap.keys[_lastProcessedIndex];
+            address account = tokenHoldersMap.keys[_lastProcessedIndex];
 
-    		if(canAutoClaim(lastClaimTimes[account])) {
-    			if(processAccount(payable(account), true)) {
-    				claims++;
-    			}
-    		}
+            if(canAutoClaim(lastClaimTimes[account])) {
+                if(processAccount(payable(account), true)) {
+                    claims++;
+                }
+            }
 
-    		iterations++;
+            iterations++;
 
-    		uint256 newGasLeft = gasleft();
+            uint256 newGasLeft = gasleft();
 
-    		if(gasLeft > newGasLeft) {
-    			gasUsed = gasUsed.add(gasLeft.sub(newGasLeft));
-    		}
+            if(gasLeft > newGasLeft) {
+                gasUsed = gasUsed.add(gasLeft.sub(newGasLeft));
+            }
 
-    		gasLeft = newGasLeft;
-    	}
+            gasLeft = newGasLeft;
+        }
 
-    	lastProcessedIndex = _lastProcessedIndex;
+        lastProcessedIndex = _lastProcessedIndex;
 
-    	return (iterations, claims, lastProcessedIndex);
+        return (iterations, claims, lastProcessedIndex);
     }
 
     function processAccount(address payable account, bool automatic) public onlyOwner returns (bool) {
         uint256 amount = _withdrawDividendOfUser(account);
 
-    	if(amount > 0) {
-    		lastClaimTimes[account] = block.timestamp;
+        if(amount > 0) {
+            lastClaimTimes[account] = block.timestamp;
             emit Claim(account, amount, automatic);
-    		return true;
-    	}
+            return true;
+        }
 
-    	return false;
+        return false;
     }
 }
