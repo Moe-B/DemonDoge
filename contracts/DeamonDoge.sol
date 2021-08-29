@@ -1452,7 +1452,7 @@ contract DeamonDoge is ERC20, Ownable {
 
     bool private swapping;
 
-    FLIGHTTICKETDividendTracker public dividendTracker;
+    DEAMONDOGEDividendTracker public dividendTracker;
     address payable public marketingWallet;
 
     address public liquidityWallet;
@@ -1537,12 +1537,12 @@ contract DeamonDoge is ERC20, Ownable {
     event SendToMarketing(uint256 tokenAmont, uint256 bnbAmount);
 
     constructor() ERC20("Deamon Doge", "DDOGE") {
-        dividendTracker = new FLIGHTTICKETDividendTracker();
+        dividendTracker = new DEAMONDOGEDividendTracker();
 
         liquidityWallet = owner();
 
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
-            0x9Ac64Cc6e4415144C455BD8E4837Fea55603e5c3
+            0x9Ac64Cc6e4415144C455BD8E4837ea55603e5c3
         ); //0x10ED43C718714eb63d5aA57B78B54704E256024E
 
         address _uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
@@ -1594,16 +1594,16 @@ contract DeamonDoge is ERC20, Ownable {
     function updateDividendTracker(address newAddress) public onlyOwner {
         require(
             newAddress != address(dividendTracker),
-            "FLIGHTTICKET: The dividend tracker already has that address"
+            "DEAMONDOGE: The dividend tracker already has that address"
         );
 
-        FLIGHTTICKETDividendTracker newDividendTracker = FLIGHTTICKETDividendTracker(
+        DEAMONDOGEDividendTracker newDividendTracker = DEAMONDOGEDividendTracker(
                 payable(newAddress)
             );
 
         require(
             newDividendTracker.owner() == address(this),
-            "FLIGHTTICKET: The new dividend tracker must be owned by the FLIGHTTICKET token contract"
+            "DEAMONDOGE: The new dividend tracker must be owned by the DEAMONDOGE token contract"
         );
 
         newDividendTracker.excludeFromDividends(address(newDividendTracker));
@@ -1619,7 +1619,7 @@ contract DeamonDoge is ERC20, Ownable {
     function updateUniswapV2Router(address newAddress) public onlyOwner {
         require(
             newAddress != address(uniswapV2Router),
-            "FLIGHTTICKET: The router already has that address"
+            "DEAMONDOGE: The router already has that address"
         );
         emit UpdateUniswapV2Router(newAddress, address(uniswapV2Router));
         uniswapV2Router = IUniswapV2Router02(newAddress);
@@ -1628,7 +1628,7 @@ contract DeamonDoge is ERC20, Ownable {
     function excludeFromFees(address account, bool excluded) public onlyOwner {
         require(
             _isExcludedFromFees[account] != excluded,
-            "FLIGHTTICKET: Account is already the value of 'excluded'"
+            "DEAMONDOGE: Account is already the value of 'excluded'"
         );
         _isExcludedFromFees[account] = excluded;
 
@@ -1688,11 +1688,11 @@ contract DeamonDoge is ERC20, Ownable {
     function updateGasForProcessing(uint256 newValue) public onlyOwner {
         require(
             newValue >= 200000 && newValue <= 500000,
-            "FLIGHTTICKET: gasForProcessing must be between 200,000 and 500,000"
+            "DEAMONDOGE: gasForProcessing must be between 200,000 and 500,000"
         );
         require(
             newValue != gasForProcessing,
-            "FLIGHTTICKET: Cannot update gasForProcessing to same value"
+            "DEAMONDOGE: Cannot update gasForProcessing to same value"
         );
         emit GasForProcessingUpdated(newValue, gasForProcessing);
         gasForProcessing = newValue;
@@ -2064,7 +2064,7 @@ contract DeamonDoge is ERC20, Ownable {
 }
 
 // part 1
-contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
+contract DEAMONDOGEDividendTracker is DividendPayingToken, Ownable {
     using SafeMath for uint256;
     using SafeMathInt for int256;
     using IterableMapping for IterableMapping.Map;
@@ -2090,8 +2090,8 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
 
     constructor()
         DividendPayingToken(
-            "FLIGHTTICKET_Dividend_Tracker",
-            "FLIGHTTICKET_Dividend_Tracker"
+            "DEAMONDOGE_Dividend_Tracker",
+            "DEAMONDOGE_Dividend_Tracker"
         )
     {
         claimWait = 3600;
@@ -2103,13 +2103,13 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
         address,
         uint256
     ) internal pure override {
-        require(false, "FLIGHTTICKET_Dividend_Tracker: No transfers allowed");
+        require(false, "DEAMONDOGE_Dividend_Tracker: No transfers allowed");
     }
 
     function withdrawDividend() public pure override {
         require(
             false,
-            "FLIGHTTICKET_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main FLIGHTTICKET contract."
+            "DEAMONDOGE_Dividend_Tracker: withdrawDividend disabled. Use the 'claim' function on the main DEAMONDOGE contract."
         );
     }
 
@@ -2126,11 +2126,11 @@ contract FLIGHTTICKETDividendTracker is DividendPayingToken, Ownable {
     function updateClaimWait(uint256 newClaimWait) external onlyOwner {
         require(
             newClaimWait >= 1200 && newClaimWait <= 86400,
-            "FLIGHTTICKET_Dividend_Tracker: claimWait must be updated to between 1 and 24 hours"
+            "DEAMONDOGE_Dividend_Tracker: claimWait must be updated to between 1 and 24 hours"
         );
         require(
             newClaimWait != claimWait,
-            "FLIGHTTICKET_Dividend_Tracker: Cannot update claimWait to same value"
+            "DEAMONDOGE_Dividend_Tracker: Cannot update claimWait to same value"
         );
         emit ClaimWaitUpdated(newClaimWait, claimWait);
         claimWait = newClaimWait;
